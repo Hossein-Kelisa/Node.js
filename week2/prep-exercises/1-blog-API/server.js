@@ -1,85 +1,90 @@
 const express = require('express');
 const fs = require('fs');
+const path = require('path');
 const app = express();
+const PORT = 3000;
 
-// Middleware to parse incoming JSON requests
+// Ensure the 'blogs' directory exists
+const blogDirectory = path.join(__dirname, 'blogs');
+if (!fs.existsSync(blogDirectory)) {
+  fs.mkdirSync(blogDirectory);
+}
+
 app.use(express.json());
 
-// 1. Create a new blog post (POST /blogs)
-app.post('/blogs', (req, res) => {
-    const { title, content } = req.body;  // Extract title and content from the request body
-    
-    // Check if both title and content are provided
-    if (title && content) {
-        // Write content to a file with the title as the filename
-        fs.writeFileSync(`${title}.txt`, content);
-        res.send('Blog post created');  // Respond with success message
-    } else {
-        res.status(400).send('Title and content are required');  // Error response if missing data
-    }
+app.get('/', (req, res) => {
+  res.send('Blog API');
 });
 
-// 2. Update an existing blog post (PUT /posts/:title)
-app.put('/posts/:title', (req, res) => {
-    const { title } = req.params;  // Get the title from the URL parameter
-    const { content } = req.body;  // Get the updated content from the request body
-    
-    // Check if the blog post exists by verifying the file
-    if (fs.existsSync(`${title}.txt`)) {
-        // If it exists, overwrite the file with the new content
-        fs.writeFileSync(`${title}.txt`, content);
-        res.send('Blog post updated');  // Respond with success message
-    } else {
-        res.status(404).send('This post does not exist!');  // Respond with error if the post doesn't exist
-    }
-});
-
-// 3. Delete a blog post (DELETE /blogs/:title)
-app.delete('/blogs/:title', (req, res) => {
-    const { title } = req.params;  // Get the title from the URL parameter
-    
-    // Check if the blog post exists by verifying the file
-    if (fs.existsSync(`${title}.txt`)) {
-        // If it exists, delete the file
-        fs.unlinkSync(`${title}.txt`);
-        res.send('Blog post deleted');  // Respond with success message
-    } else {
-        res.status(404).send('This post does not exist!');  // Respond with error if the post doesn't exist
-    }
-});
-
-// 4. Read a single blog post (GET /blogs/:title)
-app.get('/blogs/:title', (req, res) => {
-    const { title } = req.params;  // Get the title from the URL parameter
-    
-    // Check if the blog post exists by verifying the file
-    if (fs.existsSync(`${title}.txt`)) {
-        // If it exists, read the file and send the content as a response
-        const content = fs.readFileSync(`${title}.txt`, 'utf-8');
-        res.send(content);  // Send the content of the blog post
-    } else {
-        res.status(404).send('This post does not exist!');  // Respond with error if the post doesn't exist
-    }
-});
-
-// 5. Read all blog posts (GET /blogs)
+// Route to get all blogs
 app.get('/blogs', (req, res) => {
-    // Read all files in the current directory
-    const files = fs.readdirSync('./');
-    
-    // Filter out only .txt files and map them to an array of titles
-    const posts = files.filter(file => file.endsWith('.txt'))
-                       .map(file => ({ title: file.replace('.txt', '') }));
-    
-    res.json(posts);  // Send the list of posts as JSON
+  const files = fs.readdirSync(blogDirectory);
+  const blogs = files.map((file) => ({
+    title: file.replace('.txt', '') // Remove .txt extension from the title
+  }));
+
+  res.send(blogs);
 });
 
-// Default route for testing the server
-app.get('/', function (req, res) {
-    res.send('Hello World');  // Respond with a simple message
+// Route to get a specific blog post
+app.get('/blogs/:title', (req, res) => {
+  const title = req.params.title;
+  const filePath = path.join(blogDirectory, `${title}.txt`);
+
+  if (fs.existsSync(filePath)) {
+    const post = fs.readFileSync(filePath, { encoding: 'utf8' });
+    res.send(post);
+  } else {
+    res.status(404).send('This post does not exist!');
+  }
 });
 
-// Start the server on port 3000
-app.listen(3000, () => {
-    console.log('Server is running on http://localhost:3000');
+// Route to create a new blog post
+app.post('/blogs', (req, res) => {
+  const { title, content } = req.body;
+
+  if (!title || !content) {
+    return res.status(400).send('Title and content are required');
+  }
+
+  const filePath = path.join(blogDirectory, `${title}.txt`);
+  
+  fs.writeFileSync(filePath, content);
+  res.send('Post created successfully');
+});
+
+// Route to update an existing blog post
+app.put('/blogs/:title', (req, res) => {
+  const { title } = req.params;
+  const { content } = req.body;
+  const filePath = path.join(blogDirectory, `${title}.txt`);
+
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).send('This post does not exist!');
+  }
+
+  if (!content) {
+    return res.status(400).send('Content is required');
+  }
+
+  fs.writeFileSync(filePath, content);
+  res.send('Post updated successfully');
+});
+
+// Route to delete a blog post
+app.delete('/blogs/:title', (req, res) => {
+  const { title } = req.params;
+  const filePath = path.join(blogDirectory, `${title}.txt`);
+
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).send('This post does not exist!');
+  }
+
+  fs.unlinkSync(filePath);
+  res.send('Post deleted successfully');
+});
+
+// Start the server
+app.listen(PORT, () => {
+  console.log(`Server listening on port ${PORT}`);
 });
